@@ -1,3 +1,71 @@
+const express = require('express');
+const cors = require('cors');
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+const PORT = 3000;
+
+// ======= INITIAL BREAK DATA =======
+const breakData = {
+  "Asha AS": { status: "Working", totalBreak: 0, breakStart: null },
+  "Revathi Kumar": { status: "Working", totalBreak: 0, breakStart: null },
+  "Pranesh Krishnamoorthy": { status: "Working", totalBreak: 0, breakStart: null },
+  "Sheeba Rani D": { status: "Working", totalBreak: 0, breakStart: null },
+  "Subham E": { status: "Working", totalBreak: 0, breakStart: null },
+  "Sunmathy Wilson": { status: "Working", totalBreak: 0, breakStart: null },
+  "Trilokes Sahu": { status: "Working", totalBreak: 0, breakStart: null },
+  "Udhaya Kumari": { status: "Working", totalBreak: 0, breakStart: null },
+  "Afredi": { status: "Working", totalBreak: 0, breakStart: null },
+  "Akshaya Narayanan": { status: "Working", totalBreak: 0, breakStart: null },
+  "Gopal M": { status: "Working", totalBreak: 0, breakStart: null },
+  "Kamesh D": { status: "Working", totalBreak: 0, breakStart: null },
+  "Manikandan M": { status: "Working", totalBreak: 0, breakStart: null },
+  "Nirosha Banu": { status: "Working", totalBreak: 0, breakStart: null },
+  "Savitha E": { status: "Working", totalBreak: 0, breakStart: null },
+  "Muzammil Ahamed Hussain": { status: "Working", totalBreak: 0, breakStart: null },
+  "Srinivasan N": { status: "Working", totalBreak: 0, breakStart: null },
+  "Vinod Kumar": { status: "Working", totalBreak: 0, breakStart: null },
+  "Sreenath": { status: "Working", totalBreak: 0, breakStart: null },
+  "Ramya Bharathi. R": { status: "Working", totalBreak: 0, breakStart: null }
+};
+
+// ======= API =======
+
+// Get current break data
+app.get('/breakData', (req, res) => {
+  res.json(breakData);
+});
+
+// Start break
+app.post('/breakIn', (req, res) => {
+  const { name } = req.body;
+  if (breakData[name]) {
+    breakData[name].status = "On Break";
+    breakData[name].breakStart = Date.now();
+    res.json({ success: true, data: breakData[name] });
+  } else {
+    res.json({ success: false, message: "Invalid name" });
+  }
+});
+
+// End break
+app.post('/breakOut', (req, res) => {
+  const { name } = req.body;
+  if (breakData[name] && breakData[name].breakStart) {
+    const duration = Math.round((Date.now() - breakData[name].breakStart) / 60000);
+    breakData[name].totalBreak += duration;
+    if (breakData[name].totalBreak > 60) breakData[name].totalBreak = 60;
+    breakData[name].status = "Working";
+    breakData[name].breakStart = null;
+    res.json({ success: true, data: breakData[name] });
+  } else {
+    res.json({ success: false, message: "Invalid operation" });
+  }
+});
+
+app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -134,3 +202,9 @@
 </script>
 </body>
 </html>
+
+    
+        
+    
+ 
+  
