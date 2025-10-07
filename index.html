@@ -49,25 +49,16 @@
   const users = [
     { email: "d.kamesh@opendoor.com", password: "9597752296", name: "Kamesh D" },
     { email: "Manikandan.m@opendoor.com", password: "123456789", name: "Manikandan M" }
-    // Add more users here
   ];
-
-  const agents = [
-    "Asha AS","Revathi Kumar","Pranesh Krishnamoorthy","Sheeba Rani D",
-    "Subham E","Sunmathy Wilson","Trilokes Sahu","Udhaya Kumari",
-    "Afredi","Akshaya Narayanan","Gopal M","Kamesh D","Manikandan M",
-    "Nirosha Banu","Savitha E","Muzammil Ahamed Hussain","Srinivasan N",
-    "Vinod Kumar","Sreenath","Ramya Bharathi. R"
-  ];
-
-  // ======= LOCAL STORAGE BREAK DATA =======
-  if(!localStorage.getItem('breakData')) {
-    const initialData = {};
-    agents.forEach(a => initialData[a] = { status: "Working", totalBreak: 0, breakStart: null });
-    localStorage.setItem('breakData', JSON.stringify(initialData));
-  }
 
   let currentUser = null;
+  let breakData = {};
+
+  async function fetchBreakData() {
+    const res = await fetch('http://localhost:3000/breakData');
+    breakData = await res.json();
+    renderTable();
+  }
 
   function login() {
     const email = document.getElementById("email").value.trim();
@@ -78,7 +69,9 @@
       currentUser = user.name;
       document.getElementById("loginPage").classList.add("hidden");
       document.getElementById("overviewPage").classList.remove("hidden");
-      renderTable();
+      fetchBreakData();
+      // refresh every 5 sec
+      setInterval(fetchBreakData, 5000);
     } else {
       alert("Invalid email or password!");
     }
@@ -89,12 +82,31 @@
     location.reload();
   }
 
+  async function breakIn(agent) {
+    const res = await fetch('http://localhost:3000/breakIn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: agent })
+    });
+    await res.json();
+    fetchBreakData();
+  }
+
+  async function breakOut(agent) {
+    const res = await fetch('http://localhost:3000/breakOut', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: agent })
+    });
+    await res.json();
+    fetchBreakData();
+  }
+
   function renderTable() {
     const tableBody = document.getElementById("teamTable");
-    const breakData = JSON.parse(localStorage.getItem('breakData'));
     tableBody.innerHTML = '';
 
-    agents.forEach(agent => {
+    Object.keys(breakData).forEach(agent => {
       const info = breakData[agent];
       const remaining = Math.max(60 - info.totalBreak, 0);
 
@@ -112,28 +124,6 @@
       `;
       tableBody.appendChild(row);
     });
-  }
-
-  function breakIn(agent) {
-    const breakData = JSON.parse(localStorage.getItem('breakData'));
-    breakData[agent].status = "On Break";
-    breakData[agent].breakStart = Date.now();
-    localStorage.setItem('breakData', JSON.stringify(breakData));
-    renderTable();
-  }
-
-  function breakOut(agent) {
-    const breakData = JSON.parse(localStorage.getItem('breakData'));
-    const info = breakData[agent];
-    if(info.breakStart) {
-      const duration = Math.round((Date.now() - info.breakStart)/60000);
-      info.totalBreak += duration;
-      if(info.totalBreak > 60) info.totalBreak = 60;
-      info.status = "Working";
-      info.breakStart = null;
-      localStorage.setItem('breakData', JSON.stringify(breakData));
-      renderTable();
-    }
   }
 
   function formatMinutes(mins) {
