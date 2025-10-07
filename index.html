@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Universal Break Tracker</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 font-sans">
+
+<!-- LOGIN PAGE -->
+<div id="loginPage" class="flex flex-col items-center justify-center min-h-screen">
+  <div class="bg-white rounded-xl shadow p-8 w-full max-w-md">
+    <h2 class="text-3xl font-bold text-center mb-6 text-[#0d141b]">Break Tracker Login</h2>
+    <label class="block mb-4">
+      <p class="mb-2 font-medium text-[#0d141b]">Username</p>
+      <input id="username" type="text" placeholder="Enter your username" class="w-full p-3 rounded-lg border-none bg-[#e7edf3] placeholder:text-[#4c739a]" />
+    </label>
+    <button onclick="login()" class="w-full bg-[#1172d4] text-white py-3 rounded-lg font-bold">Login</button>
+  </div>
+</div>
+
+<!-- BREAK OVERVIEW PAGE -->
+<div id="overviewPage" class="hidden min-h-screen p-6">
+  <h2 class="text-2xl font-bold mb-4">Team Break Overview</h2>
+  <table class="w-full border-collapse border border-gray-200">
+    <thead>
+      <tr class="bg-gray-100">
+        <th class="border px-4 py-2">Employee</th>
+        <th class="border px-4 py-2">Status</th>
+        <th class="border px-4 py-2">Total Break Used</th>
+        <th class="border px-4 py-2">Action</th>
+      </tr>
+    </thead>
+    <tbody id="teamTable"></tbody>
+  </table>
+</div>
+
+<script>
+  // ----- Firebase Setup -----
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT.firebaseio.com",
+    projectId: "YOUR_PROJECT",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  // ----- Global -----
+  let currentUser = null;
+  const agents = [
+    "Asha AS","Revathi Kumar","Pranesh Krishnamoorthy","Sheeba Rani D",
+    "Subham E","Sunmathy Wilson","Trilokes Sahu","Udhaya Kumari",
+    "Afredi","Akshaya Narayanan","Gopal M","Kamesh D","Manikandan M",
+    "Nirosha Banu","Savitha E","Muzammil Ahamed Hussain","Srinivasan N",
+    "Vinod Kumar","Sreenath","Ramya Bharathi. R"
+  ];
+
+  // ----- Login Function -----
+  function login() {
+    const username = document.getElementById("username").value.trim();
+    if (!agents.includes(username)) {
+      alert("Invalid username");
+      return;
+    }
+    currentUser = username;
+    document.getElementById("loginPage").classList.add("hidden");
+    document.getElementById("overviewPage").classList.remove("hidden");
+    initDatabase();
+  }
+
+  // ----- Initialize Database -----
+  function initDatabase() {
+    // Set default break info if not exist
+    agents.forEach(agent => {
+      const ref = db.ref('breaks/' + agent);
+      ref.once('value', snapshot => {
+        if (!snapshot.exists()) {
+          ref.set({
+            status: "Working",
+            totalBreak: 0,
+            breakStart: null
+          });
+        }
+      });
+    });
+    listenForUpdates();
+  }
+
+  // ----- Listen for Real-Time Updates -----
+  function listenForUpdates() {
+    const tableBody = document.getElementById("teamTable");
+    db.ref('breaks').on('value', snapshot => {
+      const data = snapshot.val();
+      tableBody.innerHTML = '';
+      for (let agent of agents) {
+        const info = data[agent] || { status: "Working", totalBreak: 0 };
+        const isCurrentUser = agent === currentUser;
+        const remaining = Math.max(60 - info.totalBreak, 0);
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="border px-4 py-2">${agent}</td>
+          <td class="border px-4 py-2">${info.status}</td>
+          <td class="border px-4 py-2">${formatMinutes(info.totalBreak)}</td>
+          <td class="border px-4 py-2">
+            ${isCurrentUser ? `
+              ${info.status==="Working" && remaining>0 ? `<button class="bg-green-500 text-white px-3 py-1 rounded" onclick="breakIn('${agent}')">Break In</button>` : ''}
+              ${info.status==="On Break" ? `<button class="bg-red-500 text-white px-3 py-1 rounded" onclick="breakOut('${agent}')">Break Out</button>` : ''}
+            ` : '-'}
+          </td>
+        `;
+        tableBody.appendChild(row);
+      }
+    });
+  }
+
+  // ----- Break In -----
+  function breakIn(agent) {
+    db.ref('breaks/' + agent).update({
+      status: "On Break",
+      breakStart: Date.now()
+    });
+  }
+
+  // ----- Break Out -----
+  function breakOut(agent) {
+    const ref = db.ref('breaks/' + agent);
+    ref.once('value', snapshot => {
+      const info = snapshot.val();
+      if (info.breakStart) {
+        const duration = Math.round((Date.now() - info.breakStart) / 60000); // minutes
+        let total = (info.totalBreak || 0) + duration;
+        if (total > 60) total = 60; // cap at 60 minutes
+        ref.update({
+          status: "Working",
+          totalBreak: total,
+          breakStart: null
+        });
+      }
+    });
+  }
+
+  // ----- Helper -----
+  function formatMinutes(mins) {
+    const h = Math.floor(mins / 60).toString().padStart(2,'0');
+    const m = (mins % 60).toString().padStart(2,'0');
+    return `${h}:${m}`;
+  }
+
+</script>
+</body>
+</html>
