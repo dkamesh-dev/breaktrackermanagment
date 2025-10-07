@@ -42,9 +42,12 @@
 </div>
 
 <script>
-  // Predefined credentials
-  const validEmail = "d.kamesh@opendoor.com";
-  const validPassword = "9597752296";
+  // ======= USERS =======
+  const users = [
+    { email: "d.kamesh@opendoor.com", password: "9597752296", name: "Kamesh D" },
+    { email: "afredi@opendoor.com", password: "12345678", name: "Afredi" }
+    // Add more users here
+  ];
 
   const agents = [
     "Asha AS","Revathi Kumar","Pranesh Krishnamoorthy","Sheeba Rani D",
@@ -54,18 +57,22 @@
     "Vinod Kumar","Sreenath","Ramya Bharathi. R"
   ];
 
-  let breakData = {};
+  // ======= LOCAL STORAGE BREAK DATA =======
+  if(!localStorage.getItem('breakData')) {
+    const initialData = {};
+    agents.forEach(a => initialData[a] = { status: "Working", totalBreak: 0, breakStart: null });
+    localStorage.setItem('breakData', JSON.stringify(initialData));
+  }
 
-  // Initialize breakData
-  agents.forEach(agent => {
-    breakData[agent] = { status: "Working", totalBreak: 0, breakStart: null };
-  });
+  let currentUser = null;
 
   function login() {
     const email = document.getElementById("email").value.trim();
     const password = document.getElementById("password").value.trim();
 
-    if(email === validEmail && password === validPassword) {
+    const user = users.find(u => u.email === email && u.password === password);
+    if(user) {
+      currentUser = user.name;
       document.getElementById("loginPage").classList.add("hidden");
       document.getElementById("overviewPage").classList.remove("hidden");
       renderTable();
@@ -75,24 +82,28 @@
   }
 
   function logout() {
+    currentUser = null;
     location.reload();
   }
 
   function renderTable() {
     const tableBody = document.getElementById("teamTable");
+    const breakData = JSON.parse(localStorage.getItem('breakData'));
     tableBody.innerHTML = '';
+
     agents.forEach(agent => {
       const info = breakData[agent];
       const remaining = Math.max(60 - info.totalBreak, 0);
+
       const row = document.createElement('tr');
       row.innerHTML = `
         <td class="border px-4 py-2">${agent}</td>
         <td class="border px-4 py-2">${info.status}</td>
         <td class="border px-4 py-2">${formatMinutes(info.totalBreak)}</td>
         <td class="border px-4 py-2">
-          ${agent === "Kamesh D" ? `
-            ${info.status === "Working" && remaining>0 ? `<button class="bg-green-500 text-white px-3 py-1 rounded" onclick="breakIn('${agent}')">Break In</button>` : ''}
-            ${info.status === "On Break" ? `<button class="bg-red-500 text-white px-3 py-1 rounded" onclick="breakOut('${agent}')">Break Out</button>` : ''}
+          ${agent === currentUser ? `
+            ${info.status==="Working" && remaining>0 ? `<button class="bg-green-500 text-white px-3 py-1 rounded" onclick="breakIn('${agent}')">Break In</button>` : ''}
+            ${info.status==="On Break" ? `<button class="bg-red-500 text-white px-3 py-1 rounded" onclick="breakOut('${agent}')">Break Out</button>` : ''}
           ` : '-'}
         </td>
       `;
@@ -101,12 +112,15 @@
   }
 
   function breakIn(agent) {
+    const breakData = JSON.parse(localStorage.getItem('breakData'));
     breakData[agent].status = "On Break";
     breakData[agent].breakStart = Date.now();
+    localStorage.setItem('breakData', JSON.stringify(breakData));
     renderTable();
   }
 
   function breakOut(agent) {
+    const breakData = JSON.parse(localStorage.getItem('breakData'));
     const info = breakData[agent];
     if(info.breakStart) {
       const duration = Math.round((Date.now() - info.breakStart)/60000);
@@ -114,6 +128,7 @@
       if(info.totalBreak > 60) info.totalBreak = 60;
       info.status = "Working";
       info.breakStart = null;
+      localStorage.setItem('breakData', JSON.stringify(breakData));
       renderTable();
     }
   }
