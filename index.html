@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Universal Break Tracker</title>
+  <title>Break Tracker</title>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -15,16 +16,24 @@
   <div class="bg-white rounded-xl shadow p-8 w-full max-w-md">
     <h2 class="text-3xl font-bold text-center mb-6 text-[#0d141b]">Break Tracker Login</h2>
     <label class="block mb-4">
-      <p class="mb-2 font-medium text-[#0d141b]">Username</p>
-      <input id="username" type="text" placeholder="Enter your username" class="w-full p-3 rounded-lg border-none bg-[#e7edf3] placeholder:text-[#4c739a]" />
+      <p class="mb-2 font-medium text-[#0d141b]">Email</p>
+      <input id="email" type="email" placeholder="Enter your email" class="w-full p-3 rounded-lg border-none bg-[#e7edf3] placeholder:text-[#4c739a]" />
+    </label>
+    <label class="block mb-4">
+      <p class="mb-2 font-medium text-[#0d141b]">Password</p>
+      <input id="password" type="password" placeholder="Enter your password" class="w-full p-3 rounded-lg border-none bg-[#e7edf3] placeholder:text-[#4c739a]" />
     </label>
     <button onclick="login()" class="w-full bg-[#1172d4] text-white py-3 rounded-lg font-bold">Login</button>
+    <p class="text-center mt-4 text-sm text-[#4c739a]">Forgot password? <span class="underline cursor-pointer" onclick="resetPassword()">Reset</span></p>
   </div>
 </div>
 
 <!-- BREAK OVERVIEW PAGE -->
 <div id="overviewPage" class="hidden min-h-screen p-6">
-  <h2 class="text-2xl font-bold mb-4">Team Break Overview</h2>
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-2xl font-bold">Team Break Overview</h2>
+    <button class="bg-red-500 text-white px-4 py-2 rounded" onclick="logout()">Logout</button>
+  </div>
   <table class="w-full border-collapse border border-gray-200">
     <thead>
       <tr class="bg-gray-100">
@@ -50,10 +59,9 @@
     appId: "YOUR_APP_ID"
   };
   firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
   const db = firebase.database();
 
-  // ----- Global -----
-  let currentUser = null;
   const agents = [
     "Asha AS","Revathi Kumar","Pranesh Krishnamoorthy","Sheeba Rani D",
     "Subham E","Sunmathy Wilson","Trilokes Sahu","Udhaya Kumari",
@@ -62,22 +70,41 @@
     "Vinod Kumar","Sreenath","Ramya Bharathi. R"
   ];
 
-  // ----- Login Function -----
+  // ----- LOGIN -----
   function login() {
-    const username = document.getElementById("username").value.trim();
-    if (!agents.includes(username)) {
-      alert("Invalid username");
-      return;
-    }
-    currentUser = username;
-    document.getElementById("loginPage").classList.add("hidden");
-    document.getElementById("overviewPage").classList.remove("hidden");
-    initDatabase();
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value.trim();
+    auth.signInWithEmailAndPassword(email, password)
+      .then((userCredential) => {
+        // Signed in
+        const user = userCredential.user;
+        console.log("Logged in as:", user.email);
+        document.getElementById("loginPage").classList.add("hidden");
+        document.getElementById("overviewPage").classList.remove("hidden");
+        initDatabase(user.email);
+      })
+      .catch((error) => {
+        alert(error.message);
+      });
+  }
+
+  // ----- RESET PASSWORD -----
+  function resetPassword() {
+    const email = document.getElementById("email").value.trim();
+    if (!email) return alert("Enter your email to reset password");
+    auth.sendPasswordResetEmail(email)
+      .then(() => alert("Password reset email sent!"))
+      .catch(err => alert(err.message));
+  }
+
+  // ----- LOGOUT -----
+  function logout() {
+    auth.signOut().then(() => location.reload());
   }
 
   // ----- Initialize Database -----
-  function initDatabase() {
-    // Set default break info if not exist
+  function initDatabase(email) {
+    const username = email.split("@")[0]; // simple mapping email → agent name
     agents.forEach(agent => {
       const ref = db.ref('breaks/' + agent);
       ref.once('value', snapshot => {
@@ -90,18 +117,18 @@
         }
       });
     });
-    listenForUpdates();
+    listenForUpdates(username);
   }
 
-  // ----- Listen for Real-Time Updates -----
-  function listenForUpdates() {
+  // ----- Real-Time Updates -----
+  function listenForUpdates(currentUser) {
     const tableBody = document.getElementById("teamTable");
     db.ref('breaks').on('value', snapshot => {
       const data = snapshot.val();
       tableBody.innerHTML = '';
       for (let agent of agents) {
         const info = data[agent] || { status: "Working", totalBreak: 0 };
-        const isCurrentUser = agent === currentUser;
+        const isCurrentUser = agent.toLowerCase().includes(currentUser.toLowerCase());
         const remaining = Math.max(60 - info.totalBreak, 0);
 
         const row = document.createElement('tr');
@@ -121,7 +148,7 @@
     });
   }
 
-  // ----- Break In -----
+  // ----- Break Actions -----
   function breakIn(agent) {
     db.ref('breaks/' + agent).update({
       status: "On Break",
@@ -129,7 +156,6 @@
     });
   }
 
-  // ----- Break Out -----
   function breakOut(agent) {
     const ref = db.ref('breaks/' + agent);
     ref.once('value', snapshot => {
@@ -137,7 +163,7 @@
       if (info.breakStart) {
         const duration = Math.round((Date.now() - info.breakStart) / 60000); // minutes
         let total = (info.totalBreak || 0) + duration;
-        if (total > 60) total = 60; // cap at 60 minutes
+        if (total > 60) total = 60;
         ref.update({
           status: "Working",
           totalBreak: total,
@@ -147,13 +173,11 @@
     });
   }
 
-  // ----- Helper -----
   function formatMinutes(mins) {
     const h = Math.floor(mins / 60).toString().padStart(2,'0');
     const m = (mins % 60).toString().padStart(2,'0');
     return `${h}:${m}`;
   }
-
 </script>
 </body>
 </html>
